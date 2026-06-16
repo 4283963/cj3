@@ -57,6 +57,11 @@ class ApplicationCreate(ApplicationBase):
     pass
 
 
+class ApplicationReview(BaseModel):
+    status: str = Field(..., description="审核结果：已通过/已拒绝")
+    remark: Optional[str] = Field(None, description="审核备注", max_length=500)
+
+
 class ApplicationResponse(ApplicationBase):
     id: int
     status: str
