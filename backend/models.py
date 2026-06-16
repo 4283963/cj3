@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -22,6 +22,7 @@ class Animal(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     applications = relationship("AdoptionApplication", back_populates="animal")
+    timelines = relationship("AnimalTimeline", back_populates="animal", cascade="all, delete-orphan")
 
 
 class AdoptionApplication(Base):
@@ -41,3 +42,32 @@ class AdoptionApplication(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     animal = relationship("Animal", back_populates="applications")
+
+
+class AnimalTimeline(Base):
+    __tablename__ = "animal_timelines"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    animal_id = Column(Integer, ForeignKey("animals.id"), nullable=False, comment="动物ID")
+    author_name = Column(String(100), nullable=False, comment="发布人名字")
+    content = Column(Text, nullable=False, comment="文字内容")
+    image_url = Column(String(500), comment="图片URL")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    animal = relationship("Animal", back_populates="timelines")
+    likes = relationship("AnimalTimelineLike", back_populates="timeline", cascade="all, delete-orphan")
+
+
+class AnimalTimelineLike(Base):
+    __tablename__ = "animal_timeline_likes"
+    __table_args__ = (
+        UniqueConstraint('timeline_id', 'visitor_id', name='uq_timeline_visitor'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    timeline_id = Column(Integer, ForeignKey("animal_timelines.id"), nullable=False, comment="动态ID")
+    visitor_id = Column(String(100), nullable=False, comment="访客标识（匿名ID或用户名）")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    timeline = relationship("AnimalTimeline", back_populates="likes")

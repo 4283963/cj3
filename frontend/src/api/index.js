@@ -37,12 +37,25 @@ export const animalApi = {
     return api.get(`/animals/${id}`)
   },
 
+  getAnimalDetail: (id, visitorId) => {
+    const params = visitorId ? { visitor_id: visitorId } : {}
+    return api.get(`/animals/${id}/detail`, { params })
+  },
+
   createAnimal: (data) => {
     return api.post('/animals', data)
   },
 
   updateAnimal: (id, data) => {
     return api.patch(`/animals/${id}`, data)
+  },
+
+  createTimeline: (animalId, data) => {
+    return api.post(`/animals/${animalId}/timeline`, data)
+  },
+
+  toggleTimelineLike: (timelineId, visitorId) => {
+    return api.post(`/timeline/${timelineId}/like`, { visitor_id: visitorId })
   }
 }
 

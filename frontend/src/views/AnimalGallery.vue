@@ -71,13 +71,21 @@
               <p v-if="animal.description" class="animal-description">
                 {{ animal.description }}
               </p>
-              <router-link
-                :to="`/animals/apply/${animal.id}`"
-                :class="['btn', 'btn-primary', 'apply-btn', { disabled: animal.status === '已领养' }]"
-                @click.native.prevent="handleApplyClick(animal)"
-              >
-                {{ animal.status === '待领养' ? '申请领养' : animal.status === '申请中' ? '已有人申请' : '已领养' }}
-              </router-link>
+              <div class="card-actions">
+                <router-link
+                  :to="`/animals/detail/${animal.id}`"
+                  class="btn btn-secondary detail-btn"
+                >
+                  ✨ 成长时光机
+                </router-link>
+                <router-link
+                  :to="`/animals/apply/${animal.id}`"
+                  :class="['btn', 'btn-primary', 'apply-btn', { disabled: animal.status === '已领养' }]"
+                  @click.native.prevent="handleApplyClick(animal)"
+                >
+                  {{ animal.status === '待领养' ? '💕 申请领养' : animal.status === '申请中' ? '📋 已有人申请' : '🏡 已领养' }}
+                </router-link>
+              </div>
             </div>
           </div>
         </div>
@@ -410,6 +418,22 @@ onMounted(() => {
       color: #718096;
       margin-bottom: 1rem;
       line-height: 1.5;
+    }
+
+    .card-actions {
+      display: flex; flex-direction: column; gap: 8px; margin-top: auto;
+    }
+
+    .detail-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #fde68a, #fbbf24);
+      color: #78350f;
+      border: 1px solid #f59e0b;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+      }
     }
 
     .apply-btn {

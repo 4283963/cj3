@@ -18,6 +18,12 @@ const router = createRouter({
       name: 'AnimalApply',
       component: () => import('@/views/AnimalApply.vue'),
       meta: { title: '领养申请' }
+    },
+    {
+      path: '/animals/detail/:id',
+      name: 'AnimalDetail',
+      component: () => import('@/views/AnimalDetail.vue'),
+      meta: { title: '成长时光机' }
     }
   ]
 })

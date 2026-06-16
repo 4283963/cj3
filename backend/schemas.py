@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -70,3 +70,32 @@ class ApplicationResponse(ApplicationBase):
 
     class Config:
         from_attributes = True
+
+
+class TimelineCreate(BaseModel):
+    author_name: str = Field(..., description="发布人名字", max_length=100)
+    content: str = Field(..., description="文字内容")
+    image_url: Optional[str] = Field(None, description="图片URL", max_length=500)
+
+
+class TimelineResponse(BaseModel):
+    id: int
+    animal_id: int
+    author_name: str
+    content: str
+    image_url: Optional[str] = None
+    like_count: int = 0
+    liked_by_me: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AnimalDetailResponse(AnimalResponse):
+    timelines: List[TimelineResponse] = []
+
+
+class LikeToggle(BaseModel):
+    visitor_id: str = Field(..., description="访客标识", max_length=100)

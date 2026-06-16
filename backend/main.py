@@ -2,18 +2,22 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, text
-from typing import List
+from typing import List, Optional
 import logging
 
 from database import get_db, init_db, USE_SQLITE
-from models import Animal, AdoptionApplication
+from models import Animal, AdoptionApplication, AnimalTimeline, AnimalTimelineLike
 from schemas import (
     AnimalCreate,
     AnimalResponse,
     AnimalUpdate,
+    AnimalDetailResponse,
     ApplicationCreate,
     ApplicationResponse,
     ApplicationReview,
+    TimelineCreate,
+    TimelineResponse,
+    LikeToggle,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,7 +111,64 @@ def init_test_data(db: Session):
 
     db.add_all(test_animals)
     db.commit()
-    print("✅ 测试数据初始化成功")
+
+    for animal in test_animals:
+        db.refresh(animal)
+
+    initial_timelines = [
+        AnimalTimeline(
+            animal_id=test_animals[0].id,
+            author_name="志愿者小王",
+            content="今天在3号楼楼下发现了橘宝，当时它饿得喵喵叫，先带回救助站喂了猫粮和水。看起来精神还不错，但需要观察几天。",
+            image_url="https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[0].id,
+            author_name="志愿者小李",
+            content="橘宝今天去宠物医院做了体检，各项指标都很健康！已经完成驱虫和第一针疫苗，下周安排绝育手术。",
+            image_url="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[0].id,
+            author_name="志愿者小王",
+            content="绝育手术很成功！橘宝恢复得特别好，现在每天在救助站里晒太阳，性格超级温顺，谁来都要蹭一蹭。",
+            image_url="https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[1].id,
+            author_name="志愿者小张",
+            content="黑豆是在北门花园发现的，当时正在跟小朋友玩。很亲人的狗狗，会坐下和握手，应该是走失或者被遗弃的。",
+            image_url="https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[1].id,
+            author_name="志愿者小李",
+            content="黑豆体检一切正常，疫苗已经补打。它真的很聪明，教了几次就会定点上厕所了，每天还会帮我们拿拖鞋~",
+            image_url="https://images.unsplash.com/photo-1552053831-71594a27632d?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[2].id,
+            author_name="志愿者小王",
+            content="小白特别胆小，躲在地下室角落不敢出来。用了一罐罐头才哄出来，浑身脏兮兮的，先洗了澡做了驱虫。",
+            image_url="https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[3].id,
+            author_name="志愿者小张",
+            content="花花是在垃圾站找食物的时候发现的，很瘦。到救助站后吃得特别香，性格比较独立，适合有养猫经验的家庭。",
+            image_url="https://images.unsplash.com/photo-1561948955-570b270e7c36?w=600",
+        ),
+        AnimalTimeline(
+            animal_id=test_animals[4].id,
+            author_name="志愿者小李",
+            content="大黄在停车场流浪好多年了，小区居民都认识它。这次终于抓住做了绝育，年纪虽然大了点但身体很硬朗，特别喜欢小孩。",
+            image_url="https://images.unsplash.com/photo-1560807707-8cc77767d783?w=600",
+        ),
+    ]
+    db.add_all(initial_timelines)
+    db.commit()
+
+    print("✅ 测试数据初始化成功（含成长时光机动画）")
 
 
 db_connected = init_db()
@@ -417,18 +478,136 @@ def review_application(
         )
 
 
+def _build_timeline_response(timeline: AnimalTimeline, visitor_id: Optional[str] = None) -> TimelineResponse:
+    like_count = len(timeline.likes)
+    liked_by_me = False
+    if visitor_id:
+        liked_by_me = any(l.visitor_id == visitor_id for l in timeline.likes)
+    return TimelineResponse(
+        id=timeline.id,
+        animal_id=timeline.animal_id,
+        author_name=timeline.author_name,
+        content=timeline.content,
+        image_url=timeline.image_url,
+        like_count=like_count,
+        liked_by_me=liked_by_me,
+        created_at=timeline.created_at,
+        updated_at=timeline.updated_at,
+    )
+
+
+@app.get("/api/vinit/animals/{animal_id}/detail", response_model=AnimalDetailResponse)
+def get_animal_detail(animal_id: int, visitor_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    获取动物详情（含成长时光机时间轴，从旧到新）
+    """
+    animal = db.query(Animal).filter(Animal.id == animal_id).first()
+    if not animal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID 为 {animal_id} 的动物不存在"
+        )
+    timelines_sorted = sorted(animal.timelines, key=lambda t: t.created_at)
+    timeline_responses = [_build_timeline_response(t, visitor_id) for t in timelines_sorted]
+    return AnimalDetailResponse(
+        id=animal.id,
+        name=animal.name,
+        species=animal.species,
+        gender=animal.gender,
+        age=animal.age,
+        sterilized=animal.sterilized,
+        health_status=animal.health_status,
+        found_location=animal.found_location,
+        description=animal.description,
+        image_url=animal.image_url,
+        status=animal.status,
+        created_at=animal.created_at,
+        updated_at=animal.updated_at,
+        timelines=timeline_responses,
+    )
+
+
+@app.post("/api/vinit/animals/{animal_id}/timeline", response_model=TimelineResponse, status_code=status.HTTP_201_CREATED)
+def create_timeline(animal_id: int, timeline: TimelineCreate, db: Session = Depends(get_db)):
+    """
+    追加成长时光机动画（像发朋友圈一样）
+    """
+    animal = db.query(Animal).filter(Animal.id == animal_id).first()
+    if not animal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID 为 {animal_id} 的动物不存在"
+        )
+    if not timeline.content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="动态内容不能为空"
+        )
+    db_timeline = AnimalTimeline(
+        animal_id=animal_id,
+        author_name=timeline.author_name.strip(),
+        content=timeline.content.strip(),
+        image_url=timeline.image_url.strip() if timeline.image_url else None,
+    )
+    db.add(db_timeline)
+    db.commit()
+    db.refresh(db_timeline)
+    logger.info(f"动物 {animal.name}({animal_id}) 新增动态: 作者={db_timeline.author_name}, ID={db_timeline.id}")
+    return _build_timeline_response(db_timeline)
+
+
+@app.post("/api/vinit/timeline/{timeline_id}/like", response_model=TimelineResponse)
+def toggle_timeline_like(timeline_id: int, like_data: LikeToggle, db: Session = Depends(get_db)):
+    """
+    点赞 / 取消点赞（同一个 visitor_id 重复调用会切换状态）
+    """
+    timeline = db.query(AnimalTimeline).filter(AnimalTimeline.id == timeline_id).first()
+    if not timeline:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID 为 {timeline_id} 的动态不存在"
+        )
+    visitor_id = like_data.visitor_id.strip()
+    if not visitor_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="访客标识不能为空"
+        )
+
+    existing_like = db.query(AnimalTimelineLike).filter(
+        AnimalTimelineLike.timeline_id == timeline_id,
+        AnimalTimelineLike.visitor_id == visitor_id,
+    ).first()
+
+    if existing_like:
+        db.delete(existing_like)
+        action = "取消点赞"
+    else:
+        new_like = AnimalTimelineLike(timeline_id=timeline_id, visitor_id=visitor_id)
+        db.add(new_like)
+        action = "点赞"
+
+    db.commit()
+    db.refresh(timeline)
+    logger.info(f"动态 {timeline_id} {action}: visitor={visitor_id}, 当前点赞数={len(timeline.likes)}")
+    return _build_timeline_response(timeline, visitor_id)
+
+
 @app.get("/")
 def root():
     return {
         "message": "流浪猫狗救助领养系统 API",
         "docs": "/docs",
         "database": "SQLite" if USE_SQLITE else "MySQL",
-        "features": "已启用并发控制：行级锁 + 事务 + 状态二次校验",
+        "features": "已启用并发控制 + 成长时光机功能",
         "endpoints": {
             "POST /api/vinit/animals": "录入动物档案",
             "POST /api/vinit/apply": "提交领养申请（并发安全）",
             "GET /api/vinit/animals": "获取动物列表",
-            "GET /api/vinit/animals/{id}": "获取动物详情",
+            "GET /api/vinit/animals/{id}": "获取动物详情（基础信息）",
+            "GET /api/vinit/animals/{id}/detail": "获取动物详情（含成长时光机时间轴）",
+            "POST /api/vinit/animals/{id}/timeline": "追加成长时光机动画",
+            "POST /api/vinit/timeline/{id}/like": "点赞 / 取消点赞",
             "PATCH /api/vinit/animals/{id}": "更新动物信息",
             "GET /api/vinit/applications": "获取领养申请列表",
             "PATCH /api/vinit/applications/{id}/review": "审核领养申请（并发安全）",
